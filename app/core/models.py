@@ -1,4 +1,3 @@
-from django.contrib.auth.base_user import AbstractBaseUser
 from django.db import models
 from django.contrib.auth.models import (
     PermissionsMixin,
@@ -29,7 +28,7 @@ class UserManager(BaseUserManager):
         user.is_staff = True
         user.save(using=self._db)
 
-        return  user
+        return user
 
 
 class User(AbstractBaseUser, PermissionsMixin):
