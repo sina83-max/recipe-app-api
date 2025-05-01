@@ -40,6 +40,10 @@ def create_recipe(user, **params):
 
     return recipe
 
+def create_user(**params):
+    """Create and return a new user."""
+    return get_user_model().objects.create(**params)
+
 
 class PublicRecipeApiTests(TestCase):
     """Tests API for unauthorized requests"""
@@ -57,7 +61,7 @@ class PrivateRecipeApiTests(TestCase):
     """Tests API for authorized requests."""
     def setUp(self):
         self.client = APIClient()
-        self.user = get_user_model().objects.create(
+        self.user = create_user(
             email='test@example.com',
             password='testpass123'
         )
@@ -78,7 +82,7 @@ class PrivateRecipeApiTests(TestCase):
 
     def test_retrieve_recipes_limited_user(self):
         """Lists recipes that limited to authenticated user"""
-        other_user = get_user_model().objects.create(
+        other_user = create_user(
             email='other@example.com',
             password='otherpass123'
         )
@@ -119,3 +123,85 @@ class PrivateRecipeApiTests(TestCase):
             self.assertEqual(getattr(recipe, k), v)
 
         self.assertEqual(recipe.user, self.user)
+
+    def test_partial_update(self):
+        """Tests partial update of a recipe"""
+        original_link = "https://example.com/recipe.pdf"
+        recipe = create_recipe(
+            user=self.user,
+            title='Sample Recipe Title',
+            link=original_link,
+        )
+        payload = {'title': 'new Recipe Title'}
+        url = detail_url(recipe.id)
+        res = self.client.patch(url, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.title, payload['title'])
+        self.assertEqual(recipe.link, original_link)
+        self.assertEqual(recipe.user, self.user)
+
+    def test_full_update(self):
+        """Tests fully update of a recipe"""
+        original_link = "https://example.com/recipe.pdf"
+        recipe = create_recipe(
+            user=self.user,
+            title='Sample Recipe Title',
+            link=original_link,
+            description='Sample description for the recipe'
+        )
+        payload = {
+            'title': 'new title recipe',
+            'link': 'https://example.com/recipe2.pdf',
+            'description': 'New description for the recipe',
+            'time_minutes': 10,
+            'price': Decimal('2.56'),
+        }
+        url = detail_url(recipe.id)
+        res = self.client.put(url, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        recipe.refresh_from_db()
+        for k, v in payload.items():
+            self.assertEqual(getattr(recipe, k), v)
+        self.assertEqual(recipe.user, self.user)
+
+    def test_update_user_returns_error(self):
+        """Tests changing the recipe user result in an error."""
+        new_user = create_user(
+            email="test2@example.com",
+            password="testpass123",
+        )
+        recipe = create_recipe(self.user)
+
+        payload = {'user': new_user.id}
+        url = detail_url(recipe.id)
+        self.client.patch(url, payload)
+
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.user, self.user)
+
+    def test_delete_recipe(self):
+        """Tests deleting a recipe successful."""
+        recipe = create_recipe(user=self.user)
+
+        url = detail_url(recipe.id)
+        res = self.client.delete(url)
+
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Recipe.objects.filter(id=recipe.id).exists())
+
+    def test_delete_other_user_recipe(self):
+        """Tests deleting other user recipe unsuccessful."""
+        new_user = create_user(
+            email="test2@example.com",
+            password="testpass123",
+        )
+        recipe = create_recipe(user=new_user)
+
+        url = detail_url(recipe.id)
+        res = self.client.delete(url)
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Recipe.objects.filter(id=recipe.id).exists())
