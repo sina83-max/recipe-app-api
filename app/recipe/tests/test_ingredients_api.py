@@ -23,6 +23,10 @@ def create_user(email='email@example.com', password='testpass123'):
     )
 
 
+def detail_url(ingredient_id):
+    return reverse('recipe:ingredient-detail', args=[ingredient_id])
+
+
 class PublicIngredientApiTests(TestCase):
     """Tests for unauthenticated API requests."""
 
@@ -69,3 +73,19 @@ class PrivateIngredientApiTest(TestCase):
         self.assertEqual(len(res.data), 1)
         self.assertEqual(res.data[0]['name'], ingredient.name)
         self.assertEqual(res.data[0]['id'], ingredient.id)
+
+    def test_update_ingredient(self):
+        """Tests update ingredients details."""
+        ingredient = Ingredient.objects.create(
+            user=self.user,
+            name='pepper'
+        )
+        payload = {'name': 'salt'}
+
+        url = detail_url(ingredient.id)
+
+        res = self.client.patch(url, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ingredient.refresh_from_db()
+        self.assertEqual(ingredient.name, payload['name'])
